@@ -92,6 +92,14 @@ export class GitHubClient {
     return this.internalQuery<TR, T>(q, p, 0);
   }
 
+  private async initToken(token: Token) {
+    const response: RateLimitResponse = await graphql(rateLimitQuerySql, { headers: { authorization: `token ${token.token}` } }) as any;
+    token.ratelimitRemaining = response.rateLimit.remaining;
+    token.ratelimitReset = response.rateLimit.resetAt;
+
+    this.resetToken(token);
+  }
+
   private resetToken(token: Token) {
     if (this.hasSufficientRemaing(token)) {
       return;
@@ -105,13 +113,6 @@ export class GitHubClient {
     setTimeout(() => {
       this.initToken(token);
     }, resetTime);
-  }
-
-  private async initToken(token: Token) {
-    const response: RateLimitResponse = await graphql(rateLimitQuerySql, { headers: { authorization: `token ${token.token}` } }) as any;
-    token.ratelimitRemaining = response.rateLimit.remaining;
-    token.ratelimitReset = response.rateLimit.resetAt;
-    this.resetToken(token);
   }
 
   // get a valid token
@@ -130,8 +131,8 @@ export class GitHubClient {
       token = availableTokens[Math.floor(Math.random() * availableTokens.length)];
       return true;
     }, {
-        interval: this.getConnectionRetryInterval
-      });
+      interval: this.getConnectionRetryInterval
+    });
     return token;
   }
 
@@ -212,8 +213,9 @@ interface ResponseException {
 
 const rateLimitQueryStr = `
 rateLimit {
-    resetAt
+    cost
     remaining
+    resetAt
 }
 `;
 
@@ -222,3 +224,45 @@ query {
     ${rateLimitQueryStr}
 }
 `;
+
+
+let client = new GitHubClient({
+  tokens: ["7a16c2eb85966c1ed19e181111c344e6aae7511c"],
+  maxConcurrentReqNumber: 10,
+  maxRetryTimes: 5,
+  filterStatusCode: [400, 403],
+
+  logger: Logger.createLogger({
+    name: "My-Own-Client",
+    level: Logger.INFO
+  })
+
+});
+
+// client.init().then(v => console.log(v));
+
+let token: Token = {
+  // token for this connection
+  token: "7a16c2eb85966c1ed19e181111c344e6aae7511c",
+  // connection rate limit remaining
+  ratelimitRemaining: -1,
+  // connection rate limit reset time
+  ratelimitReset: -1
+}
+
+async function test_client(token: Token) {
+  const response: RateLimitResponse = await graphql(rateLimitQuerySql, { headers: { authorization: `token ${token.token}` } }) as any;
+  token.ratelimitRemaining = response.rateLimit.remaining;
+  token.ratelimitReset = response.rateLimit.resetAt;
+  let date = new Date(token.ratelimitReset).getTime();
+  let new_date = new Date().getTime();
+
+  console.log(token);
+  console.log(response);
+  // console.log(date - new_date);
+  // console.log(date, new_date);
+}
+
+test_client(token);
+
+// client.init();
