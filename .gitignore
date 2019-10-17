@@ -62,3 +62,5 @@ typings/
 
 # compile output
 lib
+
+src/test_client.ts
